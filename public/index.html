@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>우리 반 핏(Pit) 보드게임</title>
+  <style>
+    body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; text-align: center; background-color: #f9f9f9; }
+    #gameArea { display: none; }
+    .trade-btn { margin: 5px; padding: 15px 25px; font-size: 18px; background-color: #4CAF50; color: white; border: none; border-radius: 10px; font-weight: bold; }
+    .active-trade { margin: 10px auto; padding: 15px; background-color: #fff; border-radius: 10px; font-size: 20px; border: 3px solid #ff9800; max-width: 400px; cursor: pointer; }
+    #notifications { color: #e91e63; font-weight: bold; font-size: 22px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div id="loginArea">
+    <h2>🤝 교실 무역 게임 (Pit)</h2>
+    <input type="text" id="roomCode" placeholder="방 코드 (예: 6학년1반)" style="font-size: 18px; padding: 10px;"><br><br>
+    <input type="text" id="playerName" placeholder="내 이름" style="font-size: 18px; padding: 10px;"><br><br>
+    <button onclick="joinRoom()" style="font-size: 20px; padding: 10px 20px; background-color: #2196F3; color: white; border:none; border-radius: 8px;">입장하기</button>
+  </div>
+
+  <div id="gameArea">
+    <h3 id="roomTitle"></h3>
+    <h4 id="myName"></h4>
+    <hr>
+    <h3>내가 교환할 카드 장수 올리기</h3>
+    <button class="trade-btn" onclick="postTrade(1)">1장</button>
+    <button class="trade-btn" onclick="postTrade(2)">2장</button>
+    <button class="trade-btn" onclick="postTrade(3)">3장</button>
+    <button class="trade-btn" onclick="postTrade(4)">4장</button>
+    <hr>
+    <h3>장터 (이름을 터치해서 교환!)</h3>
+    <div id="tradesList"></div>
+    <div id="notifications"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let myRoom = '';
+
+    function joinRoom() {
+      const roomCode = document.getElementById('roomCode').value;
+      const playerName = document.getElementById('playerName').value;
+      if(roomCode && playerName) socket.emit('joinRoom', { roomCode, playerName });
+    }
+
+    socket.on('joinSuccess', ({ roomCode, playerName }) => {
+      myRoom = roomCode;
+      document.getElementById('loginArea').style.display = 'none';
+      document.getElementById('gameArea').style.display = 'block';
+      document.getElementById('roomTitle').innerText = `방 이름: ${roomCode}`;
+      document.getElementById('myName').innerText = `내 이름: ${playerName}`;
+    });
+
+    socket.on('errorMsg', (msg) => alert(msg));
+
+    function postTrade(cardCount) {
+      socket.emit('postTrade', { roomCode: myRoom, cardCount });
+    }
+
+    socket.on('updateTrades', (trades) => {
+      const tradesList = document.getElementById('tradesList');
+      tradesList.innerHTML = '';
+      trades.forEach(trade => {
+        if(trade.playerId !== socket.id) {
+          const tradeDiv = document.createElement('div');
+          tradeDiv.className = 'active-trade';
+          tradeDiv.innerHTML = `🖐️ <strong>${trade.playerName}</strong> : <strong>${trade.cardCount}장</strong> 교환 원함!`;
+          tradeDiv.onclick = () => socket.emit('acceptTrade', { roomCode: myRoom, tradeId: trade.tradeId });
+          tradesList.appendChild(tradeDiv);
+        }
+      });
+    });
+
+    socket.on('tradeCompleted', (data) => {
+      document.getElementById('notifications').innerText = data.msg;
+      setTimeout(() => { document.getElementById('notifications').innerText = ''; }, 4000);
+    });
+  </script>
+</body>
+</html>

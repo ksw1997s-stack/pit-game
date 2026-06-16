@@ -5,32 +5,52 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>우리 반 핏(Pit) 보드게임</title>
   <style>
-    body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; text-align: center; background-color: #f9f9f9; }
-    #gameArea { display: none; }
-    .trade-btn { margin: 5px; padding: 15px 25px; font-size: 18px; background-color: #4CAF50; color: white; border: none; border-radius: 10px; font-weight: bold; }
-    .active-trade { margin: 10px auto; padding: 15px; background-color: #fff; border-radius: 10px; font-size: 20px; border: 3px solid #ff9800; max-width: 400px; cursor: pointer; }
-    #notifications { color: #e91e63; font-weight: bold; font-size: 22px; margin-top: 20px; }
+    body { font-family: 'Malgun Gothic', sans-serif; padding: 10px; text-align: center; background-color: #f0f0f0; user-select: none; }
+    #gameArea, #lobbyArea { display: none; }
+    input { font-size: 18px; padding: 10px; width: 80%; max-width: 300px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc; }
+    button { font-size: 18px; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; }
+    .btn-blue { background-color: #2196F3; color: white; }
+    .btn-green { background-color: #4CAF50; color: white; margin-top: 20px; width: 80%; }
+    
+    /* 🎴 카드 스타일 */
+    #myCardsContainer { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 400px; margin: 20px auto; }
+    .card { background-color: white; border: 2px solid #ccc; border-radius: 10px; font-size: 40px; height: 80px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; position: relative; }
+    .card.selected { border-color: #e91e63; background-color: #fce4ec; transform: translateY(-5px); box-shadow: 0 5px 10px rgba(0,0,0,0.2); }
+    .card.selected::after { content: '✔️'; position: absolute; top: 5px; right: 5px; font-size: 16px; }
+
+    /* 🖐️ 장터 스타일 */
+    .active-trade { margin: 10px auto; padding: 15px; background-color: #fff; border-radius: 10px; font-size: 18px; border: 3px solid #ff9800; max-width: 400px; cursor: pointer; }
+    #notifications { color: #e91e63; font-weight: bold; font-size: 20px; margin-top: 15px; min-height: 25px; }
   </style>
 </head>
 <body>
   <div id="loginArea">
     <h2>🤝 교실 무역 게임 (Pit)</h2>
-    <input type="text" id="roomCode" placeholder="방 코드 (예: 6학년1반)" style="font-size: 18px; padding: 10px;"><br><br>
-    <input type="text" id="playerName" placeholder="내 이름" style="font-size: 18px; padding: 10px;"><br><br>
-    <button onclick="joinRoom()" style="font-size: 20px; padding: 10px 20px; background-color: #2196F3; color: white; border:none; border-radius: 8px;">입장하기</button>
+    <input type="text" id="roomCode" placeholder="방 코드 (예: 1반)"><br>
+    <input type="text" id="playerName" placeholder="내 이름 (세글자)"><br>
+    <button onclick="joinRoom()" class="btn-blue">입장하기</button>
+  </div>
+
+  <div id="lobbyArea">
+    <h3 id="lobbyTitle"></h3>
+    <p>친구가 올 때까지 기다려주세요.</p>
+    <ul id="playerList" style="list-style:none; padding:0; font-size:18px;"></ul>
+    <button id="startBtn" onclick="startGame()" class="btn-green" style="display:none;">게임 시작 (4명 이상)</button>
   </div>
 
   <div id="gameArea">
-    <h3 id="roomTitle"></h3>
-    <h4 id="myName"></h4>
+    <h4 id="gameTitle" style="margin: 0 0 10px 0;"></h4>
+    
+    <div id="myCardsContainer">
+      </div>
+    
+    <div style="margin-bottom: 10px;">
+      <span id="selectStatus">교환할 카드를 터치하여 선택하세요 (같은 종류만 가능)</span>
+      <button id="postTradeBtn" onclick="postTrade()" class="btn-blue" style="font-size:16px; padding: 5px 10px; margin-left:10px; display:none;">장터에 올리기</button>
+    </div>
+
     <hr>
-    <h3>내가 교환할 카드 장수 올리기</h3>
-    <button class="trade-btn" onclick="postTrade(1)">1장</button>
-    <button class="trade-btn" onclick="postTrade(2)">2장</button>
-    <button class="trade-btn" onclick="postTrade(3)">3장</button>
-    <button class="trade-btn" onclick="postTrade(4)">4장</button>
-    <hr>
-    <h3>장터 (이름을 터치해서 교환!)</h3>
+    <h4>장터 (이름을 터치하여 거래 수락)</h4>
     <div id="tradesList"></div>
     <div id="notifications"></div>
   </div>
@@ -39,25 +59,117 @@
   <script>
     const socket = io();
     let myRoom = '';
+    let myCards = [];
+    let selectedIndices = []; // 내가 터치해서 선택한 카드 칸(인덱스) 번호들
 
+    // --- 로그인 및 로비 로직 ---
     function joinRoom() {
-      const roomCode = document.getElementById('roomCode').value;
-      const playerName = document.getElementById('playerName').value;
+      const roomCode = document.getElementById('roomCode').value.trim();
+      const playerName = document.getElementById('playerName').value.trim();
       if(roomCode && playerName) socket.emit('joinRoom', { roomCode, playerName });
     }
 
     socket.on('joinSuccess', ({ roomCode, playerName }) => {
       myRoom = roomCode;
       document.getElementById('loginArea').style.display = 'none';
-      document.getElementById('gameArea').style.display = 'block';
-      document.getElementById('roomTitle').innerText = `방 이름: ${roomCode}`;
-      document.getElementById('myName').innerText = `내 이름: ${playerName}`;
+      document.getElementById('lobbyArea').style.display = 'block';
+      document.getElementById('lobbyTitle').innerText = `${roomCode} 대기실`;
     });
 
-    socket.on('errorMsg', (msg) => alert(msg));
+    socket.on('updatePlayers', (players) => {
+      const list = document.getElementById('playerList');
+      list.innerHTML = players.map(p => `<li>👤 ${p.name}</li>`).join('');
+      // 첫 번째 플레이어에게 시작 버튼 노출
+      if(players.length > 0 && players[0].id === socket.id) {
+        document.getElementById('startBtn').style.display = players.length >= 4 ? 'inline-block' : 'none';
+      }
+    });
 
-    function postTrade(cardCount) {
-      socket.emit('postTrade', { roomCode: myRoom, cardCount });
+    function startGame() { socket.emit('startGame', myRoom); }
+
+    // --- 🎮 게임 시작 및 카드 표시 로직 ---
+    socket.on('gameStarted', (cards) => {
+      myCards = cards;
+      document.getElementById('lobbyArea').style.display = 'none';
+      document.getElementById('gameArea').style.display = 'block';
+      document.getElementById('gameTitle').innerText = `${myRoom} - '${document.getElementById('playerName').value}'의 패`;
+      renderMyCards();
+    });
+
+    // 🃏 내 카드 9장을 화면에 그리는 함수
+    function renderMyCards() {
+      const container = document.getElementById('myCardsContainer');
+      container.innerHTML = ''; // 초기화
+      selectedIndices = []; // 선택 초기화
+      updateSelectStatus();
+
+      myCards.forEach((cardEmo, index) => {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'card';
+        cardDiv.innerText = cardEmo;
+        // 카드를 터치했을 때의 로직
+        cardDiv.onclick = () => toggleCardSelection(index);
+        container.appendChild(cardDiv);
+      });
+    }
+
+    // 서버가 맞교환 후 새 카드를 보내줬을 때
+    socket.on('updateMyCards', (newCards) => {
+      myCards = newCards;
+      renderMyCards();
+    });
+
+    // --- 👆 카드 터치 선택 로직 ---
+    function toggleCardSelection(index) {
+      const idxPos = selectedIndices.indexOf(index);
+      
+      if (idxPos > -1) {
+        // 이미 선택된 카드면 선택 해제
+        selectedIndices.splice(idxPos, 1);
+      } else {
+        // 새로 선택하는 경우
+        if (selectedIndices.length >= 4) {
+          return alert('최대 4장까지만 교환 가능합니다.');
+        }
+        
+        // **핏 핵심 규칙:** 같은 종류의 카드만 묶어서 선택 가능
+        if (selectedIndices.length > 0) {
+          const firstSelectedType = myCards[selectedIndices[0]];
+          if (myCards[index] !== firstSelectedType) {
+            return alert('같은 종류의 카드만 함께 교환할 수 있습니다.');
+          }
+        }
+        selectedIndices.push(index);
+      }
+      
+      // 화면 CSS 업데이트
+      const cardDivs = document.querySelectorAll('.card');
+      cardDivs.forEach((div, i) => {
+        if(selectedIndices.includes(i)) div.classList.add('selected');
+        else div.classList.remove('selected');
+      });
+      
+      updateSelectStatus();
+    }
+
+    function updateSelectStatus() {
+      const statusText = document.getElementById('selectStatus');
+      const postBtn = document.getElementById('postTradeBtn');
+      if(selectedIndices.length > 0) {
+        statusText.innerText = `${selectedIndices.length}장 선택됨 (${myCards[selectedIndices[0]]})`;
+        postBtn.style.display = 'inline-block';
+      } else {
+        statusText.innerText = '교환할 카드를 터치하여 선택하세요 (1~4장)';
+        postBtn.style.display = 'none';
+      }
+    }
+
+    // --- 장터 거래 로직 ---
+    // 내가 선택한 카드들 장터에 등록 요청
+    function postTrade() {
+      if(selectedIndices.length > 0) {
+        socket.emit('postTrade', { roomCode: myRoom, cardIndexes: selectedIndices });
+      }
     }
 
     socket.on('updateTrades', (trades) => {
@@ -67,8 +179,18 @@
         if(trade.playerId !== socket.id) {
           const tradeDiv = document.createElement('div');
           tradeDiv.className = 'active-trade';
-          tradeDiv.innerHTML = `🖐️ <strong>${trade.playerName}</strong> : <strong>${trade.cardCount}장</strong> 교환 원함!`;
-          tradeDiv.onclick = () => socket.emit('acceptTrade', { roomCode: myRoom, tradeId: trade.tradeId });
+          tradeDiv.innerHTML = `🖐️ <strong>${trade.playerName}</strong> : ${trade.cardCount}장 교환 원함!`;
+          
+          // 장터의 이름을 터치하면 거래 수락 로직
+          tradeDiv.onclick = () => {
+            if(selectedIndices.length === trade.cardCount) {
+              if(confirm(`${trade.playerName}님과 ${trade.cardCount}장 교환하시겠습니까?`)){
+                socket.emit('acceptTrade', { roomCode: myRoom, tradeId: trade.tradeId, myCardIndexes: selectedIndices });
+              }
+            } else {
+              alert(`장 카드를 먼저 선택해 주세요. (저쪽은 ${trade.cardCount}장을 원합니다)`);
+            }
+          };
           tradesList.appendChild(tradeDiv);
         }
       });
@@ -78,6 +200,8 @@
       document.getElementById('notifications').innerText = data.msg;
       setTimeout(() => { document.getElementById('notifications').innerText = ''; }, 4000);
     });
+    socket.on('serverMsg', (msg) => alert(msg));
+    socket.on('errorMsg', (msg) => alert(msg));
   </script>
 </body>
 </html>

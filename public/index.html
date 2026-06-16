@@ -41,8 +41,9 @@
   <div id="gameArea">
     <h4 id="gameTitle" style="margin: 0 0 10px 0;"></h4>
     
-    <div id="myCardsContainer">
-      </div>
+    <button id="victoryBtn" onclick="declareVictory()" style="display:none; width: 100%; font-size: 24px; font-weight: bold; padding: 20px; background-color: #ff9800; color: white; border: none; border-radius: 10px; margin-bottom: 15px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">🔔 시장 독점! (종 치기) 🔔</button>
+    
+    <div id="myCardsContainer"></div>
     
     <div style="margin-bottom: 10px;">
       <span id="selectStatus">교환할 카드를 터치하여 선택하세요 (같은 종류만 가능)</span>
@@ -60,7 +61,7 @@
     const socket = io();
     let myRoom = '';
     let myCards = [];
-    let selectedIndices = []; // 내가 터치해서 선택한 카드 칸(인덱스) 번호들
+    let selectedIndices = []; 
 
     // --- 로그인 및 로비 로직 ---
     function joinRoom() {
@@ -79,7 +80,6 @@
     socket.on('updatePlayers', (players) => {
       const list = document.getElementById('playerList');
       list.innerHTML = players.map(p => `<li>👤 ${p.name}</li>`).join('');
-      // 첫 번째 플레이어에게 시작 버튼 노출
       if(players.length > 0 && players[0].id === socket.id) {
         document.getElementById('startBtn').style.display = players.length >= 2 ? 'inline-block' : 'none';
       }
@@ -96,24 +96,23 @@
       renderMyCards();
     });
 
-    // 🃏 내 카드 9장을 화면에 그리는 함수
     function renderMyCards() {
       const container = document.getElementById('myCardsContainer');
-      container.innerHTML = ''; // 초기화
-      selectedIndices = []; // 선택 초기화
+      container.innerHTML = ''; 
+      selectedIndices = []; 
       updateSelectStatus();
 
       myCards.forEach((cardEmo, index) => {
         const cardDiv = document.createElement('div');
         cardDiv.className = 'card';
         cardDiv.innerText = cardEmo;
-        // 카드를 터치했을 때의 로직
         cardDiv.onclick = () => toggleCardSelection(index);
         container.appendChild(cardDiv);
       });
+      
+      checkVictory(); // 카드 다시 그릴 때마다 승리 조건 검사
     }
 
-    // 서버가 맞교환 후 새 카드를 보내줬을 때
     socket.on('updateMyCards', (newCards) => {
       myCards = newCards;
       renderMyCards();
@@ -124,15 +123,11 @@
       const idxPos = selectedIndices.indexOf(index);
       
       if (idxPos > -1) {
-        // 이미 선택된 카드면 선택 해제
         selectedIndices.splice(idxPos, 1);
       } else {
-        // 새로 선택하는 경우
         if (selectedIndices.length >= 4) {
           return alert('최대 4장까지만 교환 가능합니다.');
         }
-        
-        // **핏 핵심 규칙:** 같은 종류의 카드만 묶어서 선택 가능
         if (selectedIndices.length > 0) {
           const firstSelectedType = myCards[selectedIndices[0]];
           if (myCards[index] !== firstSelectedType) {
@@ -142,7 +137,6 @@
         selectedIndices.push(index);
       }
       
-      // 화면 CSS 업데이트
       const cardDivs = document.querySelectorAll('.card');
       cardDivs.forEach((div, i) => {
         if(selectedIndices.includes(i)) div.classList.add('selected');
@@ -165,7 +159,6 @@
     }
 
     // --- 장터 거래 로직 ---
-    // 내가 선택한 카드들 장터에 등록 요청
     function postTrade() {
       if(selectedIndices.length > 0) {
         socket.emit('postTrade', { roomCode: myRoom, cardIndexes: selectedIndices });
@@ -181,14 +174,13 @@
           tradeDiv.className = 'active-trade';
           tradeDiv.innerHTML = `🖐️ <strong>${trade.playerName}</strong> : ${trade.cardCount}장 교환 원함!`;
           
-          // 장터의 이름을 터치하면 거래 수락 로직
           tradeDiv.onclick = () => {
             if(selectedIndices.length === trade.cardCount) {
               if(confirm(`${trade.playerName}님과 ${trade.cardCount}장 교환하시겠습니까?`)){
                 socket.emit('acceptTrade', { roomCode: myRoom, tradeId: trade.tradeId, myCardIndexes: selectedIndices });
               }
             } else {
-              alert(`장 카드를 먼저 선택해 주세요. (저쪽은 ${trade.cardCount}장을 원합니다)`);
+              alert(`내 카드를 먼저 ${trade.cardCount}장 선택해 주세요!`);
             }
           };
           tradesList.appendChild(tradeDiv);
@@ -200,8 +192,28 @@
       document.getElementById('notifications').innerText = data.msg;
       setTimeout(() => { document.getElementById('notifications').innerText = ''; }, 4000);
     });
+
     socket.on('serverMsg', (msg) => alert(msg));
     socket.on('errorMsg', (msg) => alert(msg));
+
+    // --- 🏆 승리(종 치기) 로직 ---
+    function checkVictory() {
+      if (myCards.length === 9) {
+        const isAllSame = myCards.every(card => card === myCards[0]);
+        document.getElementById('victoryBtn').style.display = isAllSame ? 'block' : 'none';
+      }
+    }
+
+    function declareVictory() {
+      socket.emit('declareVictory', myRoom);
+    }
+
+    socket.on('gameOver', (data) => {
+      alert(`🎉 땡땡땡! 게임 종료!\n\n${data.winnerName} 학생이 [${data.winningCard}] 시장을 독점했습니다!`);
+      document.getElementById('victoryBtn').style.display = 'none';
+      document.getElementById('postTradeBtn').style.display = 'none';
+      document.getElementById('tradesList').innerHTML = '<h3>게임이 종료되었습니다.</h3>';
+    });
   </script>
 </body>
 </html>

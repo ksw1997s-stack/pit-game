@@ -35,7 +35,7 @@
     <h3 id="lobbyTitle"></h3>
     <p>친구가 올 때까지 기다려주세요.</p>
     <ul id="playerList" style="list-style:none; padding:0; font-size:18px;"></ul>
-    <button id="startBtn" onclick="startGame()" class="btn-green" style="display:none;">게임 시작 (4명 이상)</button>
+    <button id="startBtn" onclick="startGame()" class="btn-green" style="display:none;">게임 시작 (2명 이상)</button>
   </div>
 
   <div id="gameArea">
@@ -81,7 +81,7 @@
       list.innerHTML = players.map(p => `<li>👤 ${p.name}</li>`).join('');
       // 첫 번째 플레이어에게 시작 버튼 노출
       if(players.length > 0 && players[0].id === socket.id) {
-        document.getElementById('startBtn').style.display = players.length >= 4 ? 'inline-block' : 'none';
+        document.getElementById('startBtn').style.display = players.length >= 2 ? 'inline-block' : 'none';
       }
     });
 

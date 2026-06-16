@@ -62,8 +62,8 @@ io.on('connection', (socket) => {
     const playerIds = Object.keys(room.players);
     const playerCount = playerIds.length;
 
-    if (playerCount < 4) {
-      return socket.emit('errorMsg', '최소 4명이 필요합니다.');
+    if (playerCount < 2) {
+      return socket.emit('errorMsg', '최소 2명이 필요합니다.');
     }
 
     room.isStarted = true;

@@ -23,11 +23,13 @@ function createAndShuffleDeck(playerCount) {
       deck.push(CARD_TYPES[i]);
     }
   }
-  // 피셔-예이츠 셔플 알고리즘
+  
+  // 피셔-예이츠 셔플 알고리즘 (오류 수정됨!)
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [deck[i], deck[j]] = [deck[j], deck[deck[i]]];
+    [deck[i], deck[j]] = [deck[j], deck[i]]; // <--- deck[deck[i]] 로 되어있던 오타를 deck[i]로 수정했습니다.
   }
+  
   return deck;
 }
 

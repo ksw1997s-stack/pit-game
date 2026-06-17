@@ -11,16 +11,10 @@
     button { font-size: 18px; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; }
     .btn-blue { background-color: #2196F3; color: white; }
     .btn-green { background-color: #4CAF50; color: white; margin-top: 20px; width: 80%; }
-    
-    /* 🎴 카드 스타일 */
     #myCardsContainer { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 400px; margin: 20px auto; }
-    .card { background-color: white; border: 2px solid #ccc; border-radius: 10px; font-size: 40px; height: 80px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; position: relative; }
-    .card.selected { border-color: #e91e63; background-color: #fce4ec; transform: translateY(-5px); box-shadow: 0 5px 10px rgba(0,0,0,0.2); }
-    .card.selected::after { content: '✔️'; position: absolute; top: 5px; right: 5px; font-size: 16px; }
-
-    /* 🖐️ 장터 스타일 */
-    .active-trade { margin: 10px auto; padding: 15px; background-color: #fff; border-radius: 10px; font-size: 18px; border: 3px solid #ff9800; max-width: 400px; cursor: pointer; }
-    #notifications { color: #e91e63; font-weight: bold; font-size: 20px; margin-top: 15px; min-height: 25px; }
+    .card { background-color: white; border: 2px solid #ccc; border-radius: 10px; font-size: 40px; height: 80px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .card.selected { border-color: #e91e63; background-color: #fce4ec; }
+    .active-trade { margin: 10px auto; padding: 15px; background-color: #fff; border-radius: 10px; border: 3px solid #ff9800; max-width: 400px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -33,187 +27,122 @@
 
   <div id="lobbyArea">
     <h3 id="lobbyTitle"></h3>
-    <p>친구가 올 때까지 기다려주세요.</p>
-    <ul id="playerList" style="list-style:none; padding:0; font-size:18px;"></ul>
+    <ul id="playerList" style="list-style:none; padding:0;"></ul>
     <button id="startBtn" onclick="startGame()" class="btn-green" style="display:none;">게임 시작 (2명 이상)</button>
   </div>
 
   <div id="gameArea">
-    <h4 id="gameTitle" style="margin: 0 0 10px 0;"></h4>
-    
-    <button id="victoryBtn" onclick="declareVictory()" style="display:none; width: 100%; font-size: 24px; font-weight: bold; padding: 20px; background-color: #ff9800; color: white; border: none; border-radius: 10px; margin-bottom: 15px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">🔔 시장 독점! (종 치기) 🔔</button>
-    
+    <h4 id="gameTitle"></h4>
+    <button id="victoryBtn" onclick="declareVictory()" style="display:none; width: 100%; font-size: 24px; padding: 20px; background-color: #ff9800; color: white; border:none; border-radius:10px;">🔔 시장 독점!</button>
+    <button id="restartBtn" onclick="restartGame()" class="btn-green" style="display:none;">다시 시작하기</button>
     <div id="myCardsContainer"></div>
-    
-    <div style="margin-bottom: 10px;">
-      <span id="selectStatus">교환할 카드를 터치하여 선택하세요 (같은 종류만 가능)</span>
-      <button id="postTradeBtn" onclick="postTrade()" class="btn-blue" style="font-size:16px; padding: 5px 10px; margin-left:10px; display:none;">장터에 올리기</button>
-    </div>
-
+    <span id="selectStatus">교환할 카드를 터치 (같은 종류만)</span>
+    <button id="postTradeBtn" onclick="postTrade()" class="btn-blue" style="display:none;">장터에 올리기</button>
     <hr>
-    <h4>장터 (이름을 터치하여 거래 수락)</h4>
+    <h4>장터</h4>
     <div id="tradesList"></div>
-    <div id="notifications"></div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    let myRoom = '';
-    let myCards = [];
-    let selectedIndices = []; 
+    let myRoom = '', myCards = [], selectedIndices = [];
 
-    // --- 로그인 및 로비 로직 ---
     function joinRoom() {
       const roomCode = document.getElementById('roomCode').value.trim();
       const playerName = document.getElementById('playerName').value.trim();
       if(roomCode && playerName) socket.emit('joinRoom', { roomCode, playerName });
     }
 
-    socket.on('joinSuccess', ({ roomCode, playerName }) => {
+    socket.on('joinSuccess', ({ roomCode }) => {
       myRoom = roomCode;
       document.getElementById('loginArea').style.display = 'none';
       document.getElementById('lobbyArea').style.display = 'block';
-      document.getElementById('lobbyTitle').innerText = `${roomCode} 대기실`;
     });
 
     socket.on('updatePlayers', (players) => {
       const list = document.getElementById('playerList');
       list.innerHTML = players.map(p => `<li>👤 ${p.name}</li>`).join('');
-      if(players.length > 0 && players[0].id === socket.id) {
-        document.getElementById('startBtn').style.display = players.length >= 2 ? 'inline-block' : 'none';
-      }
+      if(players.length > 0 && players[0].id === socket.id) document.getElementById('startBtn').style.display = players.length >= 2 ? 'block' : 'none';
     });
 
     function startGame() { socket.emit('startGame', myRoom); }
 
-    // --- 🎮 게임 시작 및 카드 표시 로직 ---
     socket.on('gameStarted', (cards) => {
       myCards = cards;
       document.getElementById('lobbyArea').style.display = 'none';
       document.getElementById('gameArea').style.display = 'block';
-      document.getElementById('gameTitle').innerText = `${myRoom} - '${document.getElementById('playerName').value}'의 패`;
       renderMyCards();
     });
 
     function renderMyCards() {
       const container = document.getElementById('myCardsContainer');
-      container.innerHTML = ''; 
-      selectedIndices = []; 
-      updateSelectStatus();
-
-      myCards.forEach((cardEmo, index) => {
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'card';
-        cardDiv.innerText = cardEmo;
-        cardDiv.onclick = () => toggleCardSelection(index);
-        container.appendChild(cardDiv);
+      container.innerHTML = ''; selectedIndices = [];
+      myCards.forEach((card, index) => {
+        const div = document.createElement('div');
+        div.className = 'card'; div.innerText = card;
+        div.onclick = () => toggleCard(index);
+        container.appendChild(div);
       });
-      
-      checkVictory(); // 카드 다시 그릴 때마다 승리 조건 검사
+      checkVictory();
     }
 
-    socket.on('updateMyCards', (newCards) => {
-      myCards = newCards;
-      renderMyCards();
-    });
-
-    // --- 👆 카드 터치 선택 로직 ---
-    function toggleCardSelection(index) {
-      const idxPos = selectedIndices.indexOf(index);
-      
-      if (idxPos > -1) {
-        selectedIndices.splice(idxPos, 1);
-      } else {
-        if (selectedIndices.length >= 4) {
-          return alert('최대 4장까지만 교환 가능합니다.');
-        }
-        if (selectedIndices.length > 0) {
-          const firstSelectedType = myCards[selectedIndices[0]];
-          if (myCards[index] !== firstSelectedType) {
-            return alert('같은 종류의 카드만 함께 교환할 수 있습니다.');
-          }
-        }
+    function toggleCard(index) {
+      const pos = selectedIndices.indexOf(index);
+      if(pos > -1) selectedIndices.splice(pos, 1);
+      else {
+        if(selectedIndices.length >= 4) return alert('최대 4장');
+        if(selectedIndices.length > 0 && myCards[selectedIndices[0]] !== myCards[index]) return alert('같은 종류만 선택');
         selectedIndices.push(index);
       }
-      
-      const cardDivs = document.querySelectorAll('.card');
-      cardDivs.forEach((div, i) => {
-        if(selectedIndices.includes(i)) div.classList.add('selected');
-        else div.classList.remove('selected');
-      });
-      
-      updateSelectStatus();
+      document.querySelectorAll('.card').forEach((div, i) => div.classList.toggle('selected', selectedIndices.includes(i)));
+      document.getElementById('postTradeBtn').style.display = selectedIndices.length > 0 ? 'inline-block' : 'none';
     }
 
-    function updateSelectStatus() {
-      const statusText = document.getElementById('selectStatus');
-      const postBtn = document.getElementById('postTradeBtn');
-      if(selectedIndices.length > 0) {
-        statusText.innerText = `${selectedIndices.length}장 선택됨 (${myCards[selectedIndices[0]]})`;
-        postBtn.style.display = 'inline-block';
-      } else {
-        statusText.innerText = '교환할 카드를 터치하여 선택하세요 (1~4장)';
-        postBtn.style.display = 'none';
-      }
-    }
-
-    // --- 장터 거래 로직 ---
-    function postTrade() {
-      if(selectedIndices.length > 0) {
-        socket.emit('postTrade', { roomCode: myRoom, cardIndexes: selectedIndices });
-      }
-    }
+    function postTrade() { socket.emit('postTrade', { roomCode: myRoom, cardIndexes: selectedIndices }); }
 
     socket.on('updateTrades', (trades) => {
-      const tradesList = document.getElementById('tradesList');
-      tradesList.innerHTML = '';
-      trades.forEach(trade => {
-        if(trade.playerId !== socket.id) {
-          const tradeDiv = document.createElement('div');
-          tradeDiv.className = 'active-trade';
-          tradeDiv.innerHTML = `🖐️ <strong>${trade.playerName}</strong> : ${trade.cardCount}장 교환 원함!`;
-          
-          tradeDiv.onclick = () => {
-            if(selectedIndices.length === trade.cardCount) {
-              if(confirm(`${trade.playerName}님과 ${trade.cardCount}장 교환하시겠습니까?`)){
-                socket.emit('acceptTrade', { roomCode: myRoom, tradeId: trade.tradeId, myCardIndexes: selectedIndices });
-              }
-            } else {
-              alert(`내 카드를 먼저 ${trade.cardCount}장 선택해 주세요!`);
-            }
+      const list = document.getElementById('tradesList');
+      list.innerHTML = '';
+      trades.forEach(t => {
+        if(t.playerId !== socket.id) {
+          const div = document.createElement('div');
+          div.className = 'active-trade';
+          div.innerText = `${t.playerName}가 ${t.cardCount}장 원함!`;
+          div.onclick = () => {
+             if(selectedIndices.length === t.cardCount && confirm('교환할까요?')) socket.emit('acceptTrade', { roomCode: myRoom, tradeId: t.tradeId, myCardIndexes: selectedIndices });
           };
-          tradesList.appendChild(tradeDiv);
+          list.appendChild(div);
         }
       });
     });
 
-    socket.on('tradeCompleted', (data) => {
-      document.getElementById('notifications').innerText = data.msg;
-      setTimeout(() => { document.getElementById('notifications').innerText = ''; }, 4000);
-    });
+    socket.on('updateMyCards', (newCards) => { myCards = newCards; renderMyCards(); });
 
-    socket.on('serverMsg', (msg) => alert(msg));
-    socket.on('errorMsg', (msg) => alert(msg));
-
-    // --- 🏆 승리(종 치기) 로직 ---
     function checkVictory() {
-      if (myCards.length === 9) {
-        const isAllSame = myCards.every(card => card === myCards[0]);
-        document.getElementById('victoryBtn').style.display = isAllSame ? 'block' : 'none';
-      }
+      if (myCards.length === 9 && myCards.every(c => c === myCards[0])) document.getElementById('victoryBtn').style.display = 'block';
     }
 
-    function declareVictory() {
-      socket.emit('declareVictory', myRoom);
-    }
+    function declareVictory() { socket.emit('declareVictory', myRoom); }
+
+    function restartGame() { socket.emit('restartGame', myRoom); }
 
     socket.on('gameOver', (data) => {
-      alert(`🎉 땡땡땡! 게임 종료!\n\n${data.winnerName} 학생이 [${data.winningCard}] 시장을 독점했습니다!`);
+      alert(`🎉 ${data.winnerName} 승리!`);
       document.getElementById('victoryBtn').style.display = 'none';
       document.getElementById('postTradeBtn').style.display = 'none';
-      document.getElementById('tradesList').innerHTML = '<h3>게임이 종료되었습니다.</h3>';
+      // 방장만 다시 시작 버튼 보이기
+      document.getElementById('restartBtn').style.display = 'block';
     });
+
+    socket.on('gameReset', () => {
+      alert('새로운 게임 시작!');
+      document.getElementById('gameArea').style.display = 'none';
+      document.getElementById('lobbyArea').style.display = 'block';
+      document.getElementById('restartBtn').style.display = 'none';
+    });
+    
+    socket.on('errorMsg', (msg) => alert(msg));
   </script>
 </body>
 </html>

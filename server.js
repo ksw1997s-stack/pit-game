@@ -104,6 +104,14 @@ io.on('connection', (socket) => {
       io.to(roomCode).emit('gameOver', { winnerName: player.name, winningCard: player.cards[0] });
     }
   });
+
+  socket.on('restartGame', (roomCode) => {
+    const room = rooms[roomCode];
+    if (room) {
+      room.trades = [];
+      io.to(roomCode).emit('gameReset');
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3000;
